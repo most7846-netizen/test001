@@ -21,7 +21,7 @@
             width: 100%;
             display: flex;
             align-items: center;
-            justify-center: center;
+            justify-content: center;
             overflow: hidden;
             background-color: #000;
             transition: all 0.3s ease;
@@ -96,14 +96,18 @@
             // 모든 선택 버튼 스타일 초기화
             ['3-4', '9-16', 'full'].forEach(r => {
                 const btn = document.getElementById(`btn-ratio-${r}`);
-                btn.classList.remove('bg-blue-600', 'text-white');
-                btn.classList.add('text-gray-400');
+                if(btn) {
+                    btn.classList.remove('bg-blue-600', 'text-white');
+                    btn.classList.add('text-gray-400');
+                }
             });
             
             // 선택한 버튼 활성화
             const activeBtn = document.getElementById(`btn-ratio-${ratio.replace(':', '-')}`);
-            activeBtn.classList.remove('text-gray-400');
-            activeBtn.classList.add('bg-blue-600', 'text-white');
+            if(activeBtn) {
+                activeBtn.classList.remove('text-gray-400');
+                activeBtn.classList.add('bg-blue-600', 'text-white');
+            }
 
             // 뷰파인더 스타일 변경
             videoBox.className = "video-container mx-auto my-auto"; // 클래스 리셋
@@ -132,7 +136,7 @@
 
         // 3. 사진 촬영 (현재 지정된 비율 영역만 크롭 및 복사)
         btnCapture.addEventListener('click', () => {
-            if(!video.srcObject) return;
+            if(!video.srcObject || !video.videoWidth) return;
 
             const tempCanvas = document.createElement('canvas');
             const videoWidth = video.videoWidth;
@@ -160,13 +164,13 @@
                 }
                 startX = (videoWidth - targetWidth) / 2;
                 startY = (videoHeight - targetHeight) / 2;
-            } // FULL 비율은 크롭 없이 비디오 풀 해상도 전체 사용
+            } // FULL 비율은 크롭 없이 전체 사용
 
             tempCanvas.width = targetWidth;
             tempCanvas.height = targetHeight;
             const tempCtx = tempCanvas.getContext('2d');
             
-            // 비디오 화면의 중앙을 기준으로 계산된 비율만큼만 뜯어서 캔버스에 그림
+            // 비디오 화면의 중앙을 기준으로 계산된 비율만큼 크롭 처리
             tempCtx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
             
             rawImage = new Image();
@@ -199,7 +203,7 @@
 
             const commentText = commentInput.value.trim() || "현장 검수 사진";
             const now = new Date();
-            const dateText = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            const dateText = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
             const paddingX = canvas.width * 0.04;
             const textY = canvas.height - (barHeight / 2);
@@ -237,7 +241,7 @@
             rawImage = null;
         });
 
-        // 앱 시작 시 카메라 즉시 구동 연동
+        // 앱 시작 시 카메라 즉시 구동
         window.addEventListener('DOMContentLoaded', initCamera);
     </script>
     
