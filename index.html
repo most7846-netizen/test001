@@ -15,6 +15,21 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         body { -webkit-tap-highlight-color: transparent; }
+        /* 비율 조절을 위한 비디오 컨테이너 스타일 */
+        .video-container {
+            position: relative;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-center: center;
+            overflow: hidden;
+            background-color: #000;
+            transition: all 0.3s ease;
+        }
+        /* 각 비율별 클래스 (모바일 세로형 기준 표준 규격) */
+        .ratio-3-4 { aspect-ratio: 3 / 4; max-height: 65vh; }
+        .ratio-9-16 { aspect-ratio: 9 / 16; max-height: 70vh; }
+        .ratio-full { width: 100vw; height: calc(100vh - 180px); }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col justify-between antialiased">
@@ -23,17 +38,19 @@
         <h1 class="text-sm font-semibold tracking-wide">📸 코멘트 합성 카메라</h1>
     </header>
 
-    <main class="flex-1 flex items-center justify-center p-2 bg-black relative overflow-hidden">
-        <div id="start-prompt" class="absolute z-10 text-center space-y-4 p-4">
-            <p class="text-sm text-gray-400 leading-relaxed">안전한 사내 카메라 사용을 위해<br>아래 버튼을 눌러 권한을 승인해주세요.</p>
-            <button onclick="initCamera()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg transition transform active:scale-95">
-                📸 카메라 시작하기
-            </button>
+    <main class="flex-1 flex flex-col items-center justify-center bg-black relative overflow-hidden">
+        
+        <div id="ratio-selector" class="w-full max-w-md px-4 py-2 bg-gray-900/80 backdrop-blur-md flex justify-around border-b border-gray-800 text-xs font-semibold z-10">
+            <button onclick="changeRatio('3:4')" id="btn-ratio-3-4" class="px-4 py-1.5 rounded-full bg-blue-600 text-white transition">3:4</button>
+            <button onclick="changeRatio('9:16')" id="btn-ratio-9-16" class="px-4 py-1.5 rounded-full text-gray-400 hover:text-white transition">9:16</button>
+            <button onclick="changeRatio('FULL')" id="btn-ratio-full" class="px-4 py-1.5 rounded-full text-gray-400 hover:text-white transition">FULL</button>
         </div>
 
-        <video id="video" autoplay playsinline class="w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"></video>
+        <div id="video-box" class="video-container ratio-3-4 mx-auto my-auto">
+            <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
+        </div>
         
-        <div id="preview-container" class="hidden absolute inset-0 bg-black/90 p-4 flex flex-col justify-between z-50">
+        <div id="preview-container" class="hidden absolute inset-0 bg-black/95 p-4 flex flex-col justify-between z-50">
             <div class="flex-1 flex flex-col items-center justify-center space-y-4">
                 <p class="text-xs text-amber-400 font-medium">✨ 입력한 코멘트가 사진 하단에 합성됩니다.</p>
                 <canvas id="canvas" class="max-w-full max-h-[55vh] object-contain rounded-lg border border-gray-700 shadow-xl"></canvas>
@@ -60,6 +77,7 @@
 
     <script>
         const video = document.getElementById('video');
+        const videoBox = document.getElementById('video-box');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const previewContainer = document.getElementById('preview-container');
@@ -69,8 +87,32 @@
         const btnSave = document.getElementById('btn-save');
 
         let rawImage = null;
+        let currentRatio = "3:4"; // 기본 비율
 
-        // 카메라 권한 요청 및 구동
+        // 1. 화면 비율 변경 기능
+        function changeRatio(ratio) {
+            currentRatio = ratio;
+            
+            // 모든 선택 버튼 스타일 초기화
+            ['3-4', '9-16', 'full'].forEach(r => {
+                const btn = document.getElementById(`btn-ratio-${r}`);
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
+            
+            // 선택한 버튼 활성화
+            const activeBtn = document.getElementById(`btn-ratio-${ratio.replace(':', '-')}`);
+            activeBtn.classList.remove('text-gray-400');
+            activeBtn.classList.add('bg-blue-600', 'text-white');
+
+            // 뷰파인더 스타일 변경
+            videoBox.className = "video-container mx-auto my-auto"; // 클래스 리셋
+            if (ratio === '3:4') videoBox.classList.add('ratio-3-4');
+            else if (ratio === '9:16') videoBox.classList.add('ratio-9-16');
+            else if (ratio === 'FULL') videoBox.classList.add('ratio-full');
+        }
+
+        // 2. 페이지 로드 시 카메라 즉시 자동 구동
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -78,7 +120,6 @@
                     audio: false
                 });
                 video.srcObject = stream;
-                document.getElementById('start-prompt').classList.add('hidden');
             } catch (err) {
                 console.error(err);
                 if(location.protocol !== 'https:' && location.hostname !== 'localhost') {
@@ -89,17 +130,44 @@
             }
         }
 
-        // 사진 캡처
+        // 3. 사진 촬영 (현재 지정된 비율 영역만 크롭 및 복사)
         btnCapture.addEventListener('click', () => {
-            if(!video.srcObject) {
-                alert("먼저 '카메라 시작하기' 버튼을 눌러주세요.");
-                return;
-            }
+            if(!video.srcObject) return;
+
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = video.videoWidth;
-            tempCanvas.height = video.videoHeight;
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            
+            let targetWidth = videoWidth;
+            let targetHeight = videoHeight;
+            let startX = 0;
+            let startY = 0;
+
+            // 선택된 비율에 따라 하드웨어 카메라 영상 이미지 크롭 연산
+            if (currentRatio === "3:4") {
+                targetHeight = videoWidth * (4 / 3);
+                if(targetHeight > videoHeight) {
+                    targetHeight = videoHeight;
+                    targetWidth = videoHeight * (3 / 4);
+                }
+                startX = (videoWidth - targetWidth) / 2;
+                startY = (videoHeight - targetHeight) / 2;
+            } else if (currentRatio === "9:16") {
+                targetHeight = videoWidth * (16 / 9);
+                if(targetHeight > videoHeight) {
+                    targetHeight = videoHeight;
+                    targetWidth = videoHeight * (9 / 16);
+                }
+                startX = (videoWidth - targetWidth) / 2;
+                startY = (videoHeight - targetHeight) / 2;
+            } // FULL 비율은 크롭 없이 비디오 풀 해상도 전체 사용
+
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
             const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // 비디오 화면의 중앙을 기준으로 계산된 비율만큼만 뜯어서 캔버스에 그림
+            tempCtx.drawImage(video, startX, startY, targetWidth, targetHeight, 0, 0, targetWidth, targetHeight);
             
             rawImage = new Image();
             rawImage.src = tempCanvas.toDataURL('image/jpeg');
@@ -111,7 +179,7 @@
             };
         });
 
-        // 워터마크 텍스트 합성
+        // 4. 워터마크 텍스트 합성
         function updateCompositeImage() {
             if (!rawImage) return;
 
@@ -119,18 +187,19 @@
             canvas.height = rawImage.height;
             ctx.drawImage(rawImage, 0, 0);
 
-            const barHeight = canvas.height * 0.12;
+            // 이미지 비율에 따라 하단 반투명 바 크기 조정
+            const barHeight = canvas.height * 0.11;
             ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
             ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
 
             ctx.fillStyle = "#ffffff";
             ctx.textBaseline = "middle";
-            const fontSize = Math.max(20, Math.floor(canvas.height * 0.035));
+            const fontSize = Math.max(18, Math.floor(canvas.height * 0.032));
             ctx.font = `bold ${fontSize}px sans-serif`;
 
             const commentText = commentInput.value.trim() || "현장 검수 사진";
             const now = new Date();
-            const dateText = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            const dateText = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
             const paddingX = canvas.width * 0.04;
             const textY = canvas.height - (barHeight / 2);
@@ -167,6 +236,19 @@
             previewContainer.classList.add('hidden');
             rawImage = null;
         });
+
+        // 앱 시작 시 카메라 즉시 구동 연동
+        window.addEventListener('DOMContentLoaded', initCamera);
+    </script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then((registration) => { console.log('서비스 워커 등록 성공:', registration.scope); })
+                    .catch((error) => { console.error('서비스 워커 등록 실패:', error); });
+            });
+        }
     </script>
 </body>
 </html>
